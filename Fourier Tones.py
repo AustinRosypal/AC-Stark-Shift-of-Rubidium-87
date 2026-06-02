@@ -2,28 +2,30 @@ import pandas as pd
 import numpy as np
 from scipy.spatial import cKDTree
 
-
 def find_good_row_pairs(
     csv_path,
-    output_path="pMOT_Data_May20.csv",
-    s_col="Scalar Term",
-    v_col="Vector Term",
-    t_col="Tensor Term",
-    alpha=None,
-    beta=None,
-    gamma=None,
-    ratio_threshold=10.0,
-    max_ac_radius=None,
-    max_abs_a_sum=None,
-    max_abs_c_sum=None,
-    require_positive_b_sum=True,
-    keep_top=None,
+    output_path, #"pMOT_Data_May20.csv",
+    s_col,
+    v_col,
+    t_col,
+    mF_col,
+    wavelength_col,
+    alpha,
+    beta,
+    gamma,
+    ratio_scalar_threshold,
+    ratio_tensor_threshold,
+    max_ac_radius,
+    max_abs_a_sum,
+    max_abs_c_sum,
+    require_positive_b_sum,
+    keep_top,
 ):
     """
     Find pairs of rows where:
-        a1 + a2 is close to 0
-        c1 + c2 is close to 0
-        b1 + b2 is large
+        a1 + a2 (scalar) is close to 0
+        c1 + c2 (tensor) is close to 0
+        b1 + b2 (vector) is large
 
     Acceptance conditions:
         abs(b1 + b2) > ratio_threshold * abs(a1 + a2)
@@ -46,17 +48,23 @@ def find_good_row_pairs(
     """
 
     df = pd.read_csv(csv_path)
+    mF_value = 3
 
-    required_cols = [s_col, v_col, t_col]
+    required_cols = [s_col, v_col, t_col, mF_col, wavelength_col]
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Missing required column: {col}")
+
+    df = df[df[mF_col] == mF_value].copy()
+    if len(df) < 2:
+        raise ValueError(f"Fewer than two rows found with {mF_col} = {mF_value}.")
 
     df = df.reset_index(drop=False).rename(columns={"index": "original_index"})
 
     a = df[s_col].to_numpy(dtype=float)
     b = df[v_col].to_numpy(dtype=float)
     c = df[t_col].to_numpy(dtype=float)
+    wavelength = df[wavelength_col].to_numpy(dtype=float)
 
     n = len(df)
     print(n)
@@ -80,7 +88,7 @@ def find_good_row_pairs(
         if data_scale == 0 or not np.isfinite(data_scale):
             data_scale = 1.0
 
-        max_ac_radius = 0.05 * data_scale
+        max_ac_radius = 5*data_scale #0.05 * data_scale
 
     residual = None
     if alpha is not None and beta is not None and gamma is not None:
@@ -121,13 +129,16 @@ def find_good_row_pairs(
 
             ac_error = np.sqrt(a_sum**2 + c_sum**2)
 
-            # New acceptance criteria:
+            # Acceptance Criteria:
             #     |b_sum| > R |a_sum|
             #     |b_sum| > R |c_sum|
-            condition_a = abs_b_sum > ratio_threshold * abs_a_sum
-            condition_c = abs_b_sum > ratio_threshold * abs_c_sum
+            #     \Delta \lambda <= 0.3904 nm
+            condition_a = abs_b_sum > ratio_scalar_threshold * abs_a_sum
+            condition_c = abs_b_sum > ratio_tensor_threshold * abs_c_sum
+            condition_EOM_i = wavelength[i] >= 1529.314 - 0.3904 and wavelength[i] <= 1529.314 + 0.3904
+            condition_EOM_j = wavelength[j] >= 1529.314 - 0.3904 and wavelength[j] <= 1529.314 + 0.3904
 
-            if not (condition_a and condition_c):
+            if not (condition_a and condition_c and condition_EOM_i and condition_EOM_j): #condition_proximity):
                 continue
 
             if abs_a_sum == 0:
@@ -141,29 +152,39 @@ def find_good_row_pairs(
                 b_over_c_cancellation = abs_b_sum / abs_c_sum
 
             record = {
-                "row1_original_index": df.loc[i, "original_index"],
-                "row2_original_index": df.loc[j, "original_index"],
+                "Tone1 Wavelength (nm)": wavelength[i],
+                "Tone2 Wavelength (nm)": wavelength[j],
+                "Combined_ST_Magnitude": ac_error,
 
-                "a1": a[i],
-                "b1": b[i],
-                "c1": c[i],
+                # "alphaS_1": a[i],
+                # "alphaV_1": b[i],
+                # "alphaT_1": c[i],
+                # "alphaS_2": a[j],
+                # "alphaV_2": b[j],
+                # "alphaT_2": c[j],
+                # "alphaS_sum": a_sum,
+                # "alphaV_sum": b_sum,
+                # "alphaT_sum": c_sum,
+                # "abs_alphaS_sum": abs_a_sum,
+                # "abs_alphaV_sum": abs_b_sum,
+                # "abs_alphaT_sum": abs_c_sum,
+                # "alphaV to alphaS Ratio": b_over_a_cancellation,
+                # "alphaV to alphaT Ratio": b_over_c_cancellation,
 
-                "a2": a[j],
-                "b2": b[j],
-                "c2": c[j],
-
-                "a_sum": a_sum,
-                "b_sum": b_sum,
-                "c_sum": c_sum,
-
-                "abs_a_sum": abs_a_sum,
-                "abs_b_sum": abs_b_sum,
-                "abs_c_sum": abs_c_sum,
-
-                "ac_error": ac_error,
-
-                "b_over_abs_a_sum": b_over_a_cancellation,
-                "b_over_abs_c_sum": b_over_c_cancellation,
+                "S_1": a[i],
+                "V_1": b[i],
+                "T_1": c[i],
+                "S_2": a[j],
+                "V_2": b[j],
+                "T_2": c[j],
+                "S_sum": a_sum,
+                "V_sum": b_sum,
+                "T_sum": c_sum,
+                "abs_S_sum": abs_a_sum,
+                "abs_V_sum": abs_b_sum,
+                "abs_T_sum": abs_c_sum,
+                "V to S Ratio": b_over_a_cancellation,
+                "V to T Ratio": b_over_c_cancellation,
             }
 
             if residual is not None:
@@ -184,12 +205,12 @@ def find_good_row_pairs(
     # Otherwise sort by largest |b_sum|.
     if require_positive_b_sum:
         results = results.sort_values(
-            by=["b_sum", "ac_error"],
+            by=["alphaV_sum", "Combined_ST_Magnitude"],
             ascending=[False, True]
         )
     else:
         results = results.sort_values(
-            by=["abs_b_sum", "ac_error"],
+            by=["abs_alphaV_sum", "Combined_ST_Magnitude"],
             ascending=[False, True]
         )
 
@@ -207,13 +228,18 @@ def find_good_row_pairs(
 if __name__ == "__main__":
 
     results = find_good_row_pairs(
-        csv_path="pMOT_Data_May20.csv",
-        output_path="Viable_Fourier_Tones.csv",
+        csv_path="May30_tenthousandth_perIntensity.csv",
+        output_path="June2Tones_terms.csv",
 
-        s_col="Scalar Term",
-        v_col="Vector Term",
-        t_col="Tensor Term",
-
+        wavelength_col="Wavelength (nm)",
+        mF_col="m_F",
+        s_col="Scalar Term (MHz/I)",
+        v_col="Vector Term (MHz/I)",
+        t_col="Tensor Term (MHz/I)",
+        #s_col="Scalar Polarizability",
+        #v_col="Vector Polarizability",
+        #t_col="Tensor Polarizability",
+       
         # Optional residual diagnostics for:
         # alpha*a + beta*b + gamma*c = E
         alpha=None,
@@ -223,7 +249,8 @@ if __name__ == "__main__":
         # Require:
         # |b1 + b2| > 10*|a1 + a2|
         # |b1 + b2| > 10*|c1 + c2|
-        ratio_threshold=10.0,
+        ratio_scalar_threshold=100.0,
+        ratio_tensor_threshold=1.0,
 
         # Search radius in the (a, c) plane.
         # Tune this if you get too many or too few results.
