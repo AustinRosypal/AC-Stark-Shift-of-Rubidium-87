@@ -1,107 +1,130 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from sympy.physics.wigner import wigner_6j
 from matplotlib.animation import FuncAnimation, PillowWriter
 import pandas as pd
 from matplotlib.ticker import ScalarFormatter
 
-csv_file = "pMOT_Data_May20.csv"
+h_planck = 6.62607015e-34 # units of J*s
+c = 299792458.0 # units of m/s
+epsilon0 = 8.8541878188e-12 # units of F/m
+
+#csv_file = "DataROI_perIntensity.csv"
+#csv_file = "June9_Updated.csv"
+csv_file = "June10_5p_32_Data.csv"
 df = pd.read_csv(csv_file)
 print(df.columns)
-counter = -1
-length = len(df)
-wavelength = [0]*length
-mF = [0]*length
-alpha0 = [0]*length
-alpha1 = [0]*length
-alpha2 = [0]*length
-scalarTerm = [0]*length
-vectorTerm = [0]*length
-tensorTerm = [0]*length
-energyShift = [0]*length
+df_mF3 = df[df.iloc[:, 1] == 3].copy()
+df_mF3 = df_mF3.sort_values(by=df.columns[0])
+conv = 1 / c / h_planck / epsilon0 / 1e6 * 1e3
 
-for index, row in df.iterrows():
-    counter += 1
-    wavelength[counter] = row.iloc[0]
-    mF[counter] = row.iloc[1]
-    alpha0[counter] = row.iloc[2]
-    alpha1[counter] = row.iloc[3]
-    alpha2[counter] = row.iloc[4]
-    scalarTerm[counter] = row.iloc[5]
-    vectorTerm[counter] = row.iloc[6]
-    tensorTerm[counter] = row.iloc[7]
-    energyShift[counter] = row.iloc[8]
-    if (counter % 10000 == 0): print(counter) # print(wavelength, mF, alpha0, alpha1, alpha2, scalarTerm, vectorTerm, tensorTerm, energyShift)
+frequency   = (c / df_mF3.iloc[:, 0] * 1e9 / 1e12).to_numpy()  # Units of THz
+alpha0      = (df_mF3.iloc[:, 2] * conv).to_numpy() # Units of MHz/I = MHz/(W/cm^2)
+alpha1      = (df_mF3.iloc[:, 3] * conv).to_numpy() # Units of MHz/I = MHz/(W/cm^2)
+alpha2      = (df_mF3.iloc[:, 4] * conv).to_numpy() # Units of MHz/I = MHz/(W/cm^2)
+scalarTerm  = (df_mF3.iloc[:, 5]).to_numpy()
+vectorTerm  = (df_mF3.iloc[:, 6]).to_numpy()
+tensorTerm  = (df_mF3.iloc[:, 7]).to_numpy()
+energyShift = (df_mF3.iloc[:, 8]).to_numpy()
+
+
+a0_pos = np.where(alpha0 > 0, alpha0, np.nan)
+a0_neg = np.where(alpha0 < 0, np.abs(alpha0), np.nan)
+a1_pos = np.where(alpha1 > 0, alpha1, np.nan)
+a1_neg = np.where(alpha1 < 0, np.abs(alpha1), np.nan)
+a2_pos = np.where(alpha2 > 0, alpha2, np.nan)
+a2_neg = np.where(alpha2 < 0, np.abs(alpha2), np.nan)
 
 fig1, axes1 = plt.subplots(2, 2, figsize=(10, 8))
 fig1.suptitle('Terms of the Energy Shift Rb-87 $5p_{3/2}$ $F=3$ $m_F=3$', fontsize=16, fontweight='bold')
 
-axes1[0,0].scatter(wavelength, energyShift, s=12, color='green', label='Energy Shift')
+axes1[0,0].scatter(frequency, energyShift, s=12, color='green', label='Energy Shift')
 axes1[0,0].axhline(y=0.0, color='blue', linestyle='--')
-axes1[0,0].plot(wavelength, energyShift, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes1[0,0].plot(frequency, energyShift, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes1[0,0].set_xlabel('Wavelength (nm)')
 axes1[0,0].set_ylabel('Total Energy Shift (eV)')
 axes1[0,0].set_title('Total Energy Shift (eV)')
-axes1[0,1].scatter(wavelength, scalarTerm, s=12, color='green', label='Energy Shift')
+axes1[0,1].scatter(frequency, scalarTerm, s=12, color='green', label='Energy Shift')
 axes1[0,1].axhline(y=0.0, color='blue', linestyle='--')
-axes1[0,1].plot(wavelength, scalarTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes1[0,1].plot(frequency, scalarTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes1[0,1].set_xlabel('Wavelength (nm)')
 axes1[0,1].set_ylabel('Scalar Term Energy Shift (eV)')
 axes1[0,1].set_title('Scalar Term Contribution to Energy Shift')
-axes1[1,0].scatter(wavelength, vectorTerm, s=12, color='green', label='Energy Shift')
+axes1[1,0].scatter(frequency, vectorTerm, s=12, color='green', label='Energy Shift')
 axes1[1,0].axhline(y=0.0, color='blue', linestyle='--')
-axes1[1,0].plot(wavelength, vectorTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes1[1,0].plot(frequency, vectorTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes1[1,0].set_xlabel('Wavelength (nm)')
 axes1[1,0].set_ylabel('Vector Term Energy Shift (eV)')
 axes1[1,0].set_title('Vector Term Contribution to Energy Shift')
-axes1[1,1].scatter(wavelength, tensorTerm, s=12, color='green', label='Energy Shift')
+axes1[1,1].scatter(frequency, tensorTerm, s=12, color='green', label='Energy Shift')
 axes1[1,1].axhline(y=0.0, color='blue', linestyle='--')
-axes1[1,1].plot(wavelength, tensorTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes1[1,1].plot(frequency, tensorTerm, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes1[1,1].set_xlabel('Wavelength (nm)')
 axes1[1,1].set_ylabel('Tensor Term Energy Shift (eV)')
 axes1[1,1].set_title('Tensor Term Contribution to Energy Shift')
 
 plt.tight_layout()
-plt.savefig("plot1test.svg",bbox_inches="tight")
-plt.show()
+#plt.savefig("plot1test.svg",bbox_inches="tight")
+#plt.show()
 
 fig2, axes2 = plt.subplots(2, 2, figsize=(10, 8))
 fig2.suptitle(r'pMOT: Rb-87 $5p_{3/2}$ $F=3$ $m_F=3$', fontsize=16, fontweight='bold')
 
-axes2[0,0].scatter(wavelength, energyShift, s=12, color='green', label='Energy Shift') # Plot individual points
+axes2[0,0].scatter(frequency, energyShift, s=12, color='green', label='Energy Shift') # Plot individual points
 axes2[0,0].axhline(y=0.0, color='blue', linestyle='--')
-axes2[0,0].plot(wavelength, energyShift, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes2[0,0].plot(frequency, energyShift, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes2[0,0].set_xlabel('Wavelength (nm)')
 axes2[0,0].set_ylabel(r'Energy Shift $\Delta E$ (eV)')
 axes2[0,0].set_title('Total Energy Shift')
 axes2[0,0].legend()
 
-axes2[0,1].scatter(wavelength, alpha0, s=12, color='green', label=r'$\alpha^{(0))}$') # Plot individual points
+axes2[0,1].scatter(frequency, alpha0, s=12, color='green', label=r'$\alpha^{(0))}$') # Plot individual points
 axes2[0,1].axhline(y=0.0, color='blue', linestyle='--')
-axes2[0,1].plot(wavelength, alpha0, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes2[0,1].plot(frequency, alpha0, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes2[0,1].set_xlabel('Wavelength (nm)')
-axes2[0,1].set_ylabel(r'Scalar Polarizability $\alpha^{(0)}$ ($m^2C/V$)')
+axes2[0,1].set_ylabel(r'Scalar Polarizability $\alpha^{(0)}$ (MHz/(W/m^2))')
 axes2[0,1].set_title(r'Scalar Polarizability $\alpha^{(0)}$')
 axes2[0,1].legend()
 
-axes2[1,0].scatter(wavelength, alpha1, s=12, color='green', label=r'$\alpha^{(1)}$') # Plot individual points
+axes2[1,0].scatter(frequency, alpha1, s=12, color='green', label=r'$\alpha^{(1)}$') # Plot individual points
 axes2[1,0].axhline(y=0.0, color='blue', linestyle='--')
-axes2[1,0].plot(wavelength, alpha1, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes2[1,0].plot(frequency, alpha1, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes2[1,0].set_xlabel('Wavelength (nm)')
-axes2[1,0].set_ylabel(r'Vector Polarizability $\alpha^{(1)}$ ($m^2C/V$)')
+axes2[1,0].set_ylabel(r'Vector Polarizability $\alpha^{(1)}$ (MHz/(W/m^2))')
 axes2[1,0].set_title(r'Vector Polarizability $\alpha^{(1)}$')
 axes2[1,0].legend()
 
-axes2[1,1].scatter(wavelength, alpha2, s=12, color='green', label=r'$\alpha^{(2)}$') # Plot individual points
+axes2[1,1].scatter(frequency, alpha2, s=12, color='green', label=r'$\alpha^{(2)}$') # Plot individual points
 axes2[1,1].axhline(y=0.0, color='blue', linestyle='--')
-axes2[1,1].plot(wavelength, alpha2, linestyle=':', color='red')         # Optional: Connect with a dashed line
+axes2[1,1].plot(frequency, alpha2, linestyle=':', color='red')         # Optional: Connect with a dashed line
 axes2[1,1].set_xlabel('Wavelength (nm)')
-axes2[1,1].set_ylabel(r'Tensor Polarizability $\alpha^{(2)}$ ($m^2C/V$)')
+axes2[1,1].set_ylabel(r'Tensor Polarizability $\alpha^{(2)}$ (MHz/(W/m^2))')
 axes2[1,1].set_title(r'Tensor Polarizability $\alpha^{(2)}$')
 axes2[1,1].legend()
 
 plt.tight_layout()
-plt.savefig("plot2test.svg",bbox_inches="tight")
+#plt.savefig("plot2test.svg",bbox_inches="tight")
+#plt.show()
+
+
+fig3, axes3 = plt.subplots(figsize=(10,8))
+#axes3.scatter(wavelength, alpha0, s=12, color='green',label=r'Scalar $\alpha^{(0)}$')
+axes3.plot(frequency, a0_pos, linestyle='-', color='green',label=r'$+$ Scalar $\alpha^{(0)}$')
+axes3.plot(frequency, a0_neg, linestyle='--', color='green',label=r'$-$ Scalar $\alpha^{(0)}$')
+#axes3.scatter(wavelength, alpha1, s=12, color='orange',label=r'Vector $\alpha^{(1)}$')
+axes3.plot(frequency, a1_pos, linestyle='-', color='orange',label=r'$+$ Vector $\alpha^{(1)}$')
+axes3.plot(frequency, a1_neg, linestyle='--', color='orange',label=r'$-$ Vector $\alpha^{(1)}$')
+#axes3.scatter(wavelength, alpha2, s=12, color='purple',label=r'Tensor $\alpha^{(2)}$')
+axes3.plot(frequency, a2_pos, linestyle='-', color='purple',label=r'$+$ Tensor $\alpha^{(2)}$')
+axes3.plot(frequency, a2_neg, linestyle='--', color='purple',label=r'$-$ Tensor $\alpha^{(2)}$')
+axes3.axhline(y=0.0,color='blue',linestyle='--')
+axes3.set_xlabel(r"Optical Frequency $\nu$ (THz)")
+axes3.set_ylabel("Polarizabilities (MHz/(W/cm^2))")
+axes3.set_title("Scalar, Vector, and Tensor Polarizabilities - 5P_3/2 State")
+axes3.set_yscale("log")
+axes3.legend()
+axes3.xaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+axes3.ticklabel_format(style="plain", axis="x")
+plt.tight_layout()
 plt.show()
 
 # ------------------------------#
@@ -127,15 +150,15 @@ def get_decade_bound(yvals, min_bound=1e-9):
 df = pd.read_csv(csv_file)
 
 # Keep only relevant columns
-df = df[["Wavelength (nm)", "m_F", "Energy Shift"]].copy()
+df = df[["Wavelength (nm)", "m_F", "Energy Shift (MHz/I)"]].copy()
 
 # Make sure values are numeric
 df["Wavelength (nm)"] = pd.to_numeric(df["Wavelength (nm)"], errors="coerce")
 df["m_F"] = pd.to_numeric(df["m_F"], errors="coerce")
-df["Energy Shift"] = pd.to_numeric(df["Energy Shift"], errors="coerce")
+df["Energy Shift (MHz/I)"] = pd.to_numeric(df["Energy Shift (MHz/I)"], errors="coerce")
 
 # Drop bad rows if any exist
-df = df.dropna(subset=["Wavelength (nm)", "m_F", "Energy Shift"])
+df = df.dropna(subset=["Wavelength (nm)", "m_F", "Energy Shift (MHz/I)"])
 
 # Convert mF to integer if appropriate
 df["m_F"] = df["m_F"].astype(int)
@@ -154,7 +177,7 @@ df = df.sort_values(["Wavelength (nm)", "m_F"])
 pivot = df.pivot_table(
     index="Wavelength (nm)",
     columns="m_F",
-    values="Energy Shift",
+    values="Energy Shift (MHz/I)",
     aggfunc="mean" )
 
 # Ensure columns are ordered as mF = -3,...,+3
